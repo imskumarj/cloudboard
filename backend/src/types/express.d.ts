@@ -3,6 +3,7 @@ declare namespace Express {
     user?: {
       id: string;
       orgId: string;
+      role: "admin" | "manager" | "member";
     };
   }
 }

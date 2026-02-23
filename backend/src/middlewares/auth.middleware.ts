@@ -15,9 +15,9 @@ export const authMiddleware = async (
   }
 
   try {
-    const decoded = jwt.verify(token, ENV.JWT_SECRET) as { userId: string };
-    const user = await User.findById(decoded.userId).select("-password");
+    const decoded = jwt.verify(token, ENV.JWT_ACCESS_SECRET) as { userId: string };
 
+    const user = await User.findById(decoded.userId).select("-password");
     if (!user) {
       return res.status(401).json({ message: "User not found" });
     }
@@ -25,6 +25,7 @@ export const authMiddleware = async (
     req.user = {
       id: user._id.toString(),
       orgId: user.orgId.toString(),
+      role: user.role,
     };
 
     next();

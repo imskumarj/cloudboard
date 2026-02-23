@@ -9,6 +9,9 @@ import healthRoutes from "./routes/health.routes"
 import { errorHandler } from "./middlewares/error.middleware"
 import notificationRoutes from "./routes/notification/notification.routes"
 import authRoutes from "./routes/auth/auth.routes"
+import orgRoutes from "./routes/org/org.routes"
+import projectRoutes from "./routes/project/project.routes"
+import taskRoutes from "./routes/task/task.routes"
 
 const app = express()
 
@@ -37,6 +40,9 @@ app.use(cookieParser());
 app.use("/api/health", healthRoutes)
 app.use("/api/auth", authRoutes)
 app.use("/api/notifications", notificationRoutes)
+app.use("/api/org", orgRoutes)
+app.use("/api/projects", projectRoutes)
+app.use("/api/tasks", taskRoutes)
 
 // Global error handler
 app.use(errorHandler)
