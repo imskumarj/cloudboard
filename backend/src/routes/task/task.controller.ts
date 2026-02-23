@@ -5,7 +5,7 @@ import Task from "../../models/task.model";
 export const getTasks = async (req: Request, res: Response) => {
   const { projectId } = req.query;
 
-  const filter: any = { orgId: req.user?.orgId };
+  const filter: any = { orgId: (req as any).user?.orgId };
 
   if (projectId && projectId !== "all") {
     filter.projectId = projectId;
@@ -20,8 +20,8 @@ export const getTasks = async (req: Request, res: Response) => {
 export const createTask = async (req: Request, res: Response) => {
   const task = await Task.create({
     ...req.body,
-    orgId: req.user?.orgId,
-    createdBy: req.user?.id,
+    orgId: (req as any).user?.orgId,
+    createdBy: (req as any).user?.id,
   });
 
   res.status(201).json(task);
@@ -32,7 +32,7 @@ export const updateTask = async (req: Request, res: Response) => {
   const { id } = req.params;
 
   const task = await Task.findOneAndUpdate(
-    { _id: id, orgId: req.user?.orgId },
+    { _id: id, orgId: (req as any).user?.orgId },
     req.body,
     { new: true }
   );
@@ -46,7 +46,7 @@ export const deleteTask = async (req: Request, res: Response) => {
 
   await Task.findOneAndDelete({
     _id: id,
-    orgId: req.user?.orgId,
+    orgId: (req as any).user?.orgId,
   });
 
   res.json({ success: true });

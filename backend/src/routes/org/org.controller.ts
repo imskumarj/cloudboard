@@ -4,7 +4,7 @@ import User from "../../models/user.model";
 
 // GET organization info
 export const getOrganization = async (req: Request, res: Response) => {
-  const org = await Organization.findById(req.user?.orgId);
+  const org = await Organization.findById((req as any).user?.orgId);
   if (!org) {
     return res.status(404).json({ message: "Organization not found" });
   }
@@ -15,7 +15,7 @@ export const getOrganization = async (req: Request, res: Response) => {
 // UPDATE organization (admin only)
 export const updateOrganization = async (req: Request, res: Response) => {
   const org = await Organization.findByIdAndUpdate(
-    req.user?.orgId,
+    (req as any).user?.orgId,
     req.body,
     { new: true }
   );
@@ -25,7 +25,7 @@ export const updateOrganization = async (req: Request, res: Response) => {
 
 // GET team members
 export const getTeamMembers = async (req: Request, res: Response) => {
-  const members = await User.find({ orgId: req.user?.orgId }).select(
+  const members = await User.find({ orgId: (req as any).user?.orgId }).select(
     "-password"
   );
 

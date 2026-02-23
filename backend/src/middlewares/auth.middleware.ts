@@ -22,7 +22,7 @@ export const authMiddleware = async (
       return res.status(401).json({ message: "User not found" });
     }
 
-    req.user = {
+    (req as any).user = {
       id: user._id.toString(),
       orgId: user.orgId.toString(),
       role: user.role,

@@ -3,7 +3,7 @@ import Project from "../../models/project.model";
 
 // GET all projects
 export const getProjects = async (req: Request, res: Response) => {
-  const projects = await Project.find({ orgId: req.user?.orgId }).sort({
+  const projects = await Project.find({ orgId: (req as any).user?.orgId }).sort({
     createdAt: -1,
   });
 
@@ -17,8 +17,8 @@ export const createProject = async (req: Request, res: Response) => {
   const project = await Project.create({
     name,
     description,
-    orgId: req.user?.orgId,
-    createdBy: req.user?.id,
+    orgId: (req as any).user?.orgId,
+    createdBy: (req as any).user?.id,
   });
 
   res.status(201).json(project);
@@ -29,7 +29,7 @@ export const updateProject = async (req: Request, res: Response) => {
   const { id } = req.params;
 
   const project = await Project.findOneAndUpdate(
-    { _id: id, orgId: req.user?.orgId },
+    { _id: id, orgId: (req as any).user?.orgId },
     req.body,
     { new: true }
   );
@@ -43,7 +43,7 @@ export const deleteProject = async (req: Request, res: Response) => {
 
   await Project.findOneAndDelete({
     _id: id,
-    orgId: req.user?.orgId,
+    orgId: (req as any).user?.orgId,
   });
 
   res.json({ success: true });

@@ -3,7 +3,7 @@ import Notification from "../../models/notification.model";
 
 // GET /api/notifications
 export const getNotifications = async (req: Request, res: Response) => {
-  const userId = req.user?.id;
+  const userId = (req as any).user?.id;
 
   const notifications = await Notification.find({ userId })
     .sort({ createdAt: -1 })
@@ -18,7 +18,7 @@ export const markNotificationRead = async (
   res: Response
 ) => {
   const { id } = req.params;
-  const userId = req.user?.id;
+  const userId = (req as any).user?.id;
 
   await Notification.findOneAndUpdate(
     { _id: id, userId },
@@ -33,7 +33,7 @@ export const markAllNotificationsRead = async (
   req: Request,
   res: Response
 ) => {
-  const userId = req.user?.id;
+  const userId = (req as any).user?.id;
 
   await Notification.updateMany(
     { userId, read: false },
@@ -49,7 +49,7 @@ export const deleteNotification = async (
   res: Response
 ) => {
   const { id } = req.params;
-  const userId = req.user?.id;
+  const userId = (req as any).user?.id;
 
   await Notification.findOneAndDelete({
     _id: id,
