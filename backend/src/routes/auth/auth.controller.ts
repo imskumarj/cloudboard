@@ -23,9 +23,12 @@ export const sendOtp = async (req: Request, res: Response) => {
 
   const code = Math.floor(100000 + Math.random() * 900000).toString();
 
+  await OTP.deleteMany({ email, type: "signup" });
+
   await OTP.create({
     email,
     code,
+    type: "signup",
     expiresAt: new Date(Date.now() + 10 * 60 * 1000),
   });
 
@@ -39,7 +42,11 @@ export const verifySignup = async (req: Request, res: Response) => {
   const { name, email, password, orgName, inviteCode, role, otp } =
     req.body;
 
-  const otpRecord = await OTP.findOne({ email, code: otp });
+  const otpRecord = await OTP.findOne({
+    email,
+    code: otp,
+    type: "signup",
+  });
 
   if (!otpRecord) {
     return res.status(400).json({ message: "Invalid or expired OTP" });
@@ -148,4 +155,76 @@ export const getMe = async (req: Request, res: Response) => {
     organization,
     role: user.role,
   });
+};
+
+// 🔹 SEND RESET OTP
+export const sendResetOtp = async (req: Request, res: Response) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ message: "Email required" });
+  }
+
+  const user = await User.findOne({ email });
+
+  // ⚠️ Important: Don't reveal if user exists (security)
+  if (!user) {
+    return res.json({ success: true });
+  }
+
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+  await OTP.deleteMany({ email, type: "reset" });
+
+  await OTP.create({
+    email,
+    code,
+    type: "reset",
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+  });
+
+  await sendOtpEmail(email, user.name, code);
+
+  res.json({ success: true });
+};
+
+// 🔹 RESET PASSWORD
+export const resetPassword = async (req: Request, res: Response) => {
+  const { email, otp, newPassword } = req.body;
+
+  if (!email || !otp || !newPassword) {
+    return res.status(400).json({ message: "Missing fields" });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({
+      message: "Password must be at least 6 characters",
+    });
+  }
+
+  const otpRecord = await OTP.findOne({
+    email,
+    code: otp,
+    type: "reset",
+  });
+
+  if (!otpRecord) {
+    return res.status(400).json({
+      message: "Invalid or expired OTP",
+    });
+  }
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    return res.status(400).json({ message: "User not found" });
+  }
+
+  const hashed = await bcrypt.hash(newPassword, 10);
+
+  user.password = hashed;
+  await user.save();
+
+  await OTP.deleteMany({ email, type: "reset" });
+
+  res.json({ success: true });
 };

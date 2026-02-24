@@ -17,3 +17,25 @@ export const verifyOtpAndSignup = async (data: {
   const res = await api.post("/auth/verify-signup", data);
   return res.data;
 };
+
+// 🔹 Login (optional — since AuthContext uses api directly)
+export const loginUser = async (email: string, password: string) => {
+  const res = await api.post("/auth/login", { email, password });
+  return res.data;
+};
+
+// 🔹 Send reset OTP
+export const sendResetOtp = async (email: string) => {
+  const res = await api.post("/auth/forgot-password/send-otp", { email });
+  return res.data;
+};
+
+// 🔹 Verify OTP + Reset password
+export const resetPassword = async (data: {
+  email: string;
+  otp: string;
+  newPassword: string;
+}) => {
+  const res = await api.post("/auth/forgot-password/reset", data);
+  return res.data;
+};
