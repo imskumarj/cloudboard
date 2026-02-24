@@ -9,13 +9,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAuth } from "@/contexts/AuthContext";
 import { useTeamMembers } from "@/hooks/useOrgData";
-import { supabase } from "@/integrations/supabase/client";
-import { logActivity } from "@/lib/activity";
 import { useQueryClient } from "@tanstack/react-query";
 import { UserPlus, Shield, Mail, Copy, Check, UserCheck, UserX } from "lucide-react";
 import { toast } from "sonner";
+import {
+  approveMember,
+  declineMember,
+  changeRole,
+} from "@/services/team.service";
+import { useAuth } from "@/contexts/AuthContext";
 
 const roleColors: Record<string, string> = {
   admin: "bg-primary/20 text-primary",
@@ -43,21 +46,23 @@ function getInitials(name: string) {
 }
 
 const Team = () => {
-  const { role: currentUserRole, profile, user, organization } = useAuth();
+  const { role: currentUserRole, user, organization } = useAuth();
   const { data: members = [], isLoading } = useTeamMembers();
   const queryClient = useQueryClient();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
   const [codeCopied, setCodeCopied] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const isAdmin = currentUserRole === "admin";
   const approvedMembers = members.filter((m: any) => m.approved);
   const pendingMembers = members.filter((m: any) => !m.approved);
+  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail);
 
   const copyInviteCode = () => {
-    if (organization?.invite_code) {
-      navigator.clipboard.writeText(organization.invite_code);
+    if (organization?.inviteCode) {
+      navigator.clipboard.writeText(organization.inviteCode);
       setCodeCopied(true);
       toast.success("Invite code copied!");
       setTimeout(() => setCodeCopied(false), 2000);
@@ -66,81 +71,34 @@ const Team = () => {
 
   const handleInvite = async () => {
     toast.success(`Invitation sent to ${inviteEmail}`);
-    if (profile && user) {
-      logActivity(profile.org_id!, user.id, "invited member", inviteEmail);
-    }
     setInviteOpen(false);
     setInviteEmail("");
   };
 
-  const handleApprove = async (memberId: string, memberName: string, memberUserId: string) => {
-    const { error } = await supabase
-      .from("profiles")
-      .update({ approved: true })
-      .eq("id", memberId);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-
-    // Send notification to the approved user
-    await supabase.from("notifications").insert({
-      user_id: memberUserId,
-      type: "approval",
-      title: "Access Approved!",
-      message: `Your request to join ${organization?.name} has been approved. You now have full access.`,
-      org_id: profile?.org_id,
-    });
-
-    // Send approval email
+  const handleApprove = async (userId: string, name: string) => {
     try {
-      const { data: memberProfile } = await supabase
-        .from("profiles")
-        .select("email")
-        .eq("id", memberId)
-        .single();
-      if (memberProfile) {
-        await supabase.functions.invoke("send-email", {
-          body: {
-            type: "notification",
-            to: memberProfile.email,
-            subject: `Welcome to ${organization?.name}!`,
-            html: `<div style="font-family: Arial; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-              <h1 style="color: #7c3aed;">CloudBoard</h1>
-              <h2>You've been approved!</h2>
-              <p>Hi ${memberName}, your request to join <strong>${organization?.name}</strong> has been approved. You now have full access to the platform.</p>
-              <a href="${window.location.origin}/dashboard" style="display: inline-block; background: #7c3aed; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin-top: 16px;">Go to Dashboard</a>
-            </div>`,
-          },
-        });
-      }
-    } catch (e) {
-      // Email is best-effort
+      setActionLoading(userId);
+      await approveMember(userId);
+      toast.success(`${name} approved`);
+      queryClient.invalidateQueries({ queryKey: ["team"] });
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to approve member");
+    } finally {
+      setActionLoading(null);
     }
-
-    toast.success(`${memberName} has been approved`);
-    if (profile && user) {
-      logActivity(profile.org_id!, user.id, "approved member", memberName);
-    }
-    queryClient.invalidateQueries({ queryKey: ["team"] });
   };
 
-  const handleDecline = async (memberId: string, memberName: string, memberUserId: string) => {
-    // Send rejection notification
-    await supabase.from("notifications").insert({
-      user_id: memberUserId,
-      type: "rejection",
-      title: "Access Declined",
-      message: `Your request to join ${organization?.name} has been declined.`,
-      org_id: profile?.org_id,
-    });
-
-    // Remove profile and role
-    await supabase.from("user_roles").delete().eq("user_id", memberUserId);
-    await supabase.from("profiles").delete().eq("id", memberId);
-
-    toast.success(`${memberName}'s request has been declined`);
-    queryClient.invalidateQueries({ queryKey: ["team"] });
+  const handleDecline = async (userId: string, name: string) => {
+    try {
+      setActionLoading(userId);
+      await declineMember(userId);
+      toast.success(`${name} declined`);
+      queryClient.invalidateQueries({ queryKey: ["team"] });
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to decline member");
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const handleRoleChange = async (userId: string, newRole: string) => {
@@ -148,15 +106,16 @@ const Team = () => {
       toast.error("Only admins can change roles");
       return;
     }
-    const { error } = await supabase
-      .from("user_roles")
-      .update({ role: newRole as any })
-      .eq("user_id", userId);
-    if (error) {
-      toast.error(error.message);
-    } else {
+
+    try {
+      setActionLoading(userId);
+      await changeRole(userId, newRole);
       toast.success("Role updated");
       queryClient.invalidateQueries({ queryKey: ["team"] });
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update role");
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -202,7 +161,7 @@ const Team = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button onClick={handleInvite} className="w-full" disabled={!inviteEmail}>
+                <Button onClick={handleInvite} className="w-full" disabled={!isValidEmail}>
                   Send Invitation
                 </Button>
               </div>
@@ -212,7 +171,7 @@ const Team = () => {
       </div>
 
       {/* Invite Code Card (Admin Only) */}
-      {isAdmin && organization?.invite_code && (
+      {isAdmin && organization?.inviteCode && (
         <Card className="border-primary/20 bg-primary/5">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
@@ -221,7 +180,7 @@ const Team = () => {
             </div>
             <div className="flex items-center gap-2">
               <code className="bg-background px-4 py-2 rounded-lg text-lg font-mono font-bold tracking-widest border border-border">
-                {organization.invite_code}
+                {organization.inviteCode}
               </code>
               <Button variant="outline" size="icon" onClick={copyInviteCode}>
                 {codeCopied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
@@ -253,10 +212,10 @@ const Team = () => {
                   </div>
                   <Badge className="capitalize text-[10px] bg-muted text-muted-foreground">{m.role}</Badge>
                   <div className="flex gap-1.5">
-                    <Button size="sm" variant="outline" className="h-8 text-green-600 border-green-200 hover:bg-green-50" onClick={() => handleApprove(m.id, m.name, m.user_id)}>
+                    <Button disabled={actionLoading === m.id} size="sm" variant="outline" className="h-8 text-green-600 border-green-200 hover:bg-green-50" onClick={() => handleApprove(m.id, m.name)}>
                       <UserCheck className="h-3.5 w-3.5 mr-1" /> Approve
                     </Button>
-                    <Button size="sm" variant="outline" className="h-8 text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleDecline(m.id, m.name, m.user_id)}>
+                    <Button disabled={actionLoading === m.id} size="sm" variant="outline" className="h-8 text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleDecline(m.id, m.name)}>
                       <UserX className="h-3.5 w-3.5 mr-1" /> Decline
                     </Button>
                   </div>
@@ -283,8 +242,12 @@ const Team = () => {
                   <p className="font-medium text-sm">{m.name}</p>
                   <p className="text-xs text-muted-foreground">{m.email}</p>
                 </div>
-                {isAdmin && m.user_id !== user?.id ? (
-                  <Select value={m.role} onValueChange={(v) => handleRoleChange(m.user_id, v)}>
+                {isAdmin && m.id !== user?.id ? (
+                  <Select
+                    value={m.role}
+                    disabled={actionLoading === m.id}
+                    onValueChange={(v) => handleRoleChange(m.id, v)}
+                  >
                     <SelectTrigger className="w-28 h-8">
                       <SelectValue />
                     </SelectTrigger>
