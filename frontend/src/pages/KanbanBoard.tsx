@@ -17,9 +17,9 @@ import {
   createTask,
   updateTask,
 } from "@/services/task.service";
-import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Calendar, Filter } from "lucide-react";
 import { toast } from "sonner";
+import { socket } from "@/services/socket";
 
 type TaskStatus = "todo" | "in-progress" | "in-review" | "done";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
@@ -46,7 +46,6 @@ const KanbanBoard = () => {
   const { profile, user } = useAuth();
   const { data: projects = [] } = useProjects();
   const { data: members = [] } = useTeamMembers();
-  const queryClient = useQueryClient();
 
   const [tasks, setTasks] = useState<any[]>([]);
   const [filterProject, setFilterProject] = useState<string>("all");
@@ -60,11 +59,45 @@ const KanbanBoard = () => {
     project_id: "",
   });
 
+  useEffect(() => {
+    if (!profile?.orgId) return;
+
+    socket.emit("join-org", profile.orgId);
+  }, [profile?.orgId]);
+
+  useEffect(() => {
+    socket.on("task-created", (task) => {
+      setTasks((prev) => [task, ...prev]);
+    });
+
+    socket.on("task-updated", (updatedTask) => {
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === updatedTask.id ? updatedTask : t
+        )
+      );
+    });
+
+    socket.on("task-deleted", ({ id }) => {
+      setTasks((prev) => prev.filter((t) => t.id !== id));
+    });
+
+    return () => {
+      socket.off("task-created");
+      socket.off("task-updated");
+      socket.off("task-deleted");
+    };
+  }, []);
+
   // Fetch tasks
   useEffect(() => {
     const fetchTasks = async () => {
+      setLoading(true);
+
       try {
-        const data = await getTasks(filterProject === "all" ? undefined : filterProject);
+        const data = await getTasks(
+          filterProject === "all" ? undefined : filterProject
+        );
         setTasks(data);
       } catch {
         toast.error("Failed to load tasks");
@@ -90,21 +123,29 @@ const KanbanBoard = () => {
 
   const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
+
+    if (result.destination.droppableId === result.source.droppableId)
+      return;
+
     const newStatus = result.destination.droppableId as TaskStatus;
     const taskId = result.draggableId;
-    
-    // Optimistic update
-    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)));
+
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === taskId ? { ...t, status: newStatus } : t
+      )
+    );
 
     try {
       await updateTask(taskId, { status: newStatus });
     } catch {
       toast.error("Failed to update task");
 
-      // revert optimistic update
       setTasks((prev) =>
         prev.map((t) =>
-          t.id === taskId ? { ...t, status: result.source.droppableId } : t
+          t.id === taskId
+            ? { ...t, status: result.source.droppableId }
+            : t
         )
       );
     }
@@ -112,7 +153,7 @@ const KanbanBoard = () => {
 
   const handleAddTask = async () => {
     try {
-      const task = await createTask({
+      await createTask({
         title: newTask.title,
         description: newTask.description,
         priority: newTask.priority,
@@ -121,8 +162,6 @@ const KanbanBoard = () => {
         status: "todo",
         dueDate: new Date(Date.now() + 7 * 86400000),
       });
-
-      setTasks((prev) => [task, ...prev]);
 
       toast.success("Task created!");
 
@@ -143,7 +182,9 @@ const KanbanBoard = () => {
   };
 
   const getAssigneeName = (userId: string) => {
-    const m = members.find((m: any) => m.id || m._id === userId);
+    const m = members.find(
+      (m: any) => (m.id || m._id)?.toString() === userId?.toString()
+    );
     return m?.name || "Unassigned";
   };
 

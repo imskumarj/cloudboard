@@ -3,6 +3,8 @@ import cors from "cors"
 import helmet from "helmet"
 import morgan from "morgan"
 import cookieParser from "cookie-parser";
+import rateLimit from "express-rate-limit";
+import compression from "compression";
 
 import { ENV } from "./config/env"
 import healthRoutes from "./routes/health.routes"
@@ -17,6 +19,23 @@ const app = express()
 
 // Security
 app.use(helmet())
+
+// Global API Rate Limit
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 300, // 300 requests per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+);
+
+app.use(compression());
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20, // max 20 login attempts
+});
 
 // CORS
 app.use(
@@ -38,7 +57,7 @@ app.use(cookieParser());
 
 // Routes
 app.use("/api/health", healthRoutes)
-app.use("/api/auth", authRoutes)
+app.use("/api/auth", authLimiter, authRoutes)
 app.use("/api/notifications", notificationRoutes)
 app.use("/api/org", orgRoutes)
 app.use("/api/projects", projectRoutes)
