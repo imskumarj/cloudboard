@@ -3,11 +3,21 @@ import Project from "../../models/project.model";
 
 // GET all projects
 export const getProjects = async (req: Request, res: Response) => {
-  const projects = await Project.find({ orgId: (req as any).user?.orgId }).sort({
-    createdAt: -1,
-  });
+  const projects = await Project.find({
+    orgId: (req as any).user?.orgId,
+  }).sort({ createdAt: -1 });
 
-  res.json(projects);
+  const formatted = projects.map((p) => ({
+    id: p._id,
+    name: p.name,
+    description: p.description,
+    status: p.status,
+    progress: p.progress,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt,
+  }));
+
+  res.json(formatted);
 };
 
 // CREATE project (admin + manager)

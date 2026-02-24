@@ -11,8 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjects, useTasks } from "@/hooks/useOrgData";
-import { supabase } from "@/integrations/supabase/client";
-import { logActivity } from "@/lib/activity";
+import { createProject } from "@/services/project.service";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, LayoutGrid, List, Briefcase } from "lucide-react";
 import { toast } from "sonner";
@@ -35,21 +34,21 @@ const Projects = () => {
   const canCreate = role === "admin" || role === "manager";
 
   const handleAdd = async () => {
-    if (!profile?.org_id || !user) return;
-    const { error } = await supabase.from("projects").insert({
-      name: newProject.name,
-      description: newProject.description,
-      org_id: profile.org_id,
-      created_by: user.id,
-    });
-    if (error) {
-      toast.error(error.message);
-    } else {
+    try {
+      await createProject({
+        name: newProject.name,
+        description: newProject.description,
+      });
+
       toast.success("Project created!");
-      logActivity(profile.org_id, user.id, "created project", newProject.name);
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+
       setNewProject({ name: "", description: "" });
       setAddOpen(false);
+    } catch (err: any) {
+      toast.error(
+        err.response?.data?.message || "Failed to create project"
+      );
     }
   };
 
@@ -101,7 +100,7 @@ const Projects = () => {
       ) : view === "grid" ? (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {projects.map((p: any) => {
-            const taskCount = tasks.filter((t: any) => t.project_id === p.id).length;
+            const taskCount = tasks.filter((t: any) => t.projectId === p.id).length;
             return (
               <Card key={p.id} className="hover:border-primary/30 transition-colors">
                 <CardContent className="p-5 space-y-3">
@@ -125,7 +124,7 @@ const Projects = () => {
                     </div>
                     <Progress value={p.progress} className="h-1.5" />
                   </div>
-                  <span className="text-[11px] text-muted-foreground">Updated {new Date(p.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                  <span className="text-[11px] text-muted-foreground">Updated {new Date(p.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                 </CardContent>
               </Card>
             );
