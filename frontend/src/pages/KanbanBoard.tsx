@@ -12,8 +12,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjects, useTeamMembers } from "@/hooks/useOrgData";
-import { supabase } from "@/integrations/supabase/client";
-import { logActivity } from "@/lib/activity";
+import {
+  getTasks,
+  createTask,
+  updateTask,
+} from "@/services/task.service";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Calendar, Filter } from "lucide-react";
 import { toast } from "sonner";
@@ -59,31 +62,19 @@ const KanbanBoard = () => {
 
   // Fetch tasks
   useEffect(() => {
-    if (!profile?.org_id) return;
     const fetchTasks = async () => {
-      const { data, error } = await supabase.from("tasks").select("*").order("created_at", { ascending: false });
-      if (!error && data) setTasks(data);
-      setLoading(false);
+      try {
+        const data = await getTasks(filterProject === "all" ? undefined : filterProject);
+        setTasks(data);
+      } catch {
+        toast.error("Failed to load tasks");
+      } finally {
+        setLoading(false);
+      }
     };
-    fetchTasks();
-  }, [profile?.org_id]);
 
-  // Realtime subscription for tasks
-  useEffect(() => {
-    const channel = supabase
-      .channel("tasks-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, (payload) => {
-        if (payload.eventType === "INSERT") {
-          setTasks((prev) => [payload.new as any, ...prev]);
-        } else if (payload.eventType === "UPDATE") {
-          setTasks((prev) => prev.map((t) => (t.id === (payload.new as any).id ? payload.new : t)));
-        } else if (payload.eventType === "DELETE") {
-          setTasks((prev) => prev.filter((t) => t.id !== (payload.old as any).id));
-        }
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, []);
+    fetchTasks();
+  }, [filterProject]);
 
   // Set defaults when data loads
   useEffect(() => {
@@ -105,43 +96,54 @@ const KanbanBoard = () => {
     // Optimistic update
     setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)));
 
-    const { error } = await supabase.from("tasks").update({ status: newStatus }).eq("id", taskId);
-    if (error) {
+    try {
+      await updateTask(taskId, { status: newStatus });
+    } catch {
       toast.error("Failed to update task");
-      // Revert
-      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: result.source.droppableId } : t)));
-    } else if (profile && user) {
-      const task = tasks.find((t) => t.id === taskId);
-      logActivity(profile.org_id!, user.id, `moved task to ${newStatus}`, task?.title || "");
+
+      // revert optimistic update
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId ? { ...t, status: result.source.droppableId } : t
+        )
+      );
     }
   };
 
   const handleAddTask = async () => {
-    if (!user || !profile?.org_id) return;
-    const { data, error } = await supabase.from("tasks").insert({
-      title: newTask.title,
-      description: newTask.description,
-      priority: newTask.priority,
-      assignee_id: newTask.assignee_id,
-      project_id: newTask.project_id,
-      status: "todo",
-      created_by: user.id,
-      due_date: new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0],
-    }).select().single();
+    try {
+      const task = await createTask({
+        title: newTask.title,
+        description: newTask.description,
+        priority: newTask.priority,
+        projectId: newTask.project_id,
+        assignedTo: newTask.assignee_id,
+        status: "todo",
+        dueDate: new Date(Date.now() + 7 * 86400000),
+      });
 
-    if (error) {
-      toast.error(error.message);
-    } else {
+      setTasks((prev) => [task, ...prev]);
+
       toast.success("Task created!");
-      logActivity(profile.org_id, user.id, "created task", newTask.title);
-      setNewTask({ title: "", description: "", priority: "medium", assignee_id: user.id, project_id: projects[0]?.id || "" });
+
+      setNewTask({
+        title: "",
+        description: "",
+        priority: "medium",
+        assignee_id: user?.id || "",
+        project_id: projects[0]?.id || "",
+      });
+
       setAddOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    } catch (err: any) {
+      toast.error(
+        err.response?.data?.message || "Failed to create task"
+      );
     }
   };
 
   const getAssigneeName = (userId: string) => {
-    const m = members.find((m: any) => m.user_id === userId);
+    const m = members.find((m: any) => m.id || m._id === userId);
     return m?.name || "Unassigned";
   };
 
@@ -227,7 +229,7 @@ const KanbanBoard = () => {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {members.map((m: any) => (
-                        <SelectItem key={m.user_id} value={m.user_id}>{m.name}</SelectItem>
+                        <SelectItem key={m.id || m._id} value={m.id || m._id}>{m.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

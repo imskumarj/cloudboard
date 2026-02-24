@@ -13,7 +13,20 @@ export const getTasks = async (req: Request, res: Response) => {
 
   const tasks = await Task.find(filter).sort({ createdAt: -1 });
 
-  res.json(tasks);
+  const formatted = tasks.map((t) => ({
+    id: t._id,
+    title: t.title,
+    description: t.description,
+    status: t.status,
+    priority: t.priority,
+    project_id: t.projectId,
+    assignee_id: t.assignedTo,
+    due_date: t.dueDate,
+    tags: t.tags || [],
+    created_at: t.createdAt,
+  }));
+
+  res.json(formatted);
 };
 
 // CREATE task (admin + manager)
