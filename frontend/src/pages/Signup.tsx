@@ -7,9 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { FolderKanban } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { sendOtp, verifyOtpAndSignup } from "@/services/auth.service";
 
 type AppRole = "admin" | "manager" | "member";
 
@@ -23,50 +23,30 @@ const Signup = () => {
   const [role, setRole] = useState<AppRole>("admin");
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
-  const [signupData, setSignupData] = useState<{ userId: string } | null>(null);
+
   const navigate = useNavigate();
   const { refreshProfile } = useAuth();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (password.length < 6) {
       toast.error("Password must be at least 6 characters");
       return;
     }
 
-    // For non-admin, validate invite code first
-    if (role !== "admin") {
-      if (!inviteCode.trim()) {
-        toast.error("Invite code is required to join an organization");
-        return;
-      }
-      const { data: org } = await supabase
-        .from("organizations")
-        .select("id")
-        .eq("invite_code", inviteCode.trim().toUpperCase())
-        .maybeSingle();
-      if (!org) {
-        toast.error("Invalid invite code. Please check and try again.");
-        return;
-      }
-    }
-
     setLoading(true);
 
-    // Send OTP email
     try {
-      const res = await supabase.functions.invoke("send-email", {
-        body: { type: "otp", to: email, name },
-      });
-      if (res.error) {
-        toast.error("Failed to send verification email");
-        setLoading(false);
-        return;
-      }
+      await sendOtp(email, name);
       toast.success("Verification code sent to your email!");
       setStep("otp");
-    } catch {
-      toast.error("Failed to send verification email");
+    } catch (err: any) {
+      toast.error(
+        err.response?.data?.message || "Failed to send verification email"
+      );
     }
+
     setLoading(false);
   };
 
@@ -75,75 +55,31 @@ const Signup = () => {
       toast.error("Please enter the 6-digit code");
       return;
     }
+
     setLoading(true);
 
-    // Verify OTP
-    const { data: verifyData, error: verifyError } = await supabase.functions.invoke("send-email", {
-      body: { type: "verify-otp", email, otp },
-    });
-    if (verifyError || !verifyData?.valid) {
-      toast.error("Invalid or expired code. Please try again.");
-      setLoading(false);
-      return;
+    try {
+      await verifyOtpAndSignup({
+        name,
+        email,
+        password,
+        orgName,
+        inviteCode,
+        role,
+        otp,
+      });
+
+      toast.success("Account created successfully!");
+      await refreshProfile();
+      navigate("/dashboard");
+    } catch (err: any) {
+      toast.error(
+        err.response?.data?.message ||
+          "Invalid or expired code. Please try again."
+      );
     }
 
-    // Now do the actual signup
-    const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
-    if (authError) {
-      toast.error(authError.message);
-      setLoading(false);
-      return;
-    }
-    if (!authData.user) {
-      toast.error("Signup failed");
-      setLoading(false);
-      return;
-    }
-
-    const userId = authData.user.id;
-
-    if (role === "admin") {
-      // Create organization
-      const orgId = crypto.randomUUID();
-      const { error: orgError } = await supabase.from("organizations").insert({ id: orgId, name: orgName });
-      if (orgError) { toast.error(orgError.message); setLoading(false); return; }
-
-      // Create profile (approved = true for admin)
-      const { error: profileError } = await supabase.from("profiles").insert({ user_id: userId, name, email, org_id: orgId, approved: true });
-      if (profileError) { toast.error(profileError.message); setLoading(false); return; }
-
-      // Assign admin role
-      const { error: roleError } = await supabase.from("user_roles").insert({ user_id: userId, role: "admin" });
-      if (roleError) { toast.error(roleError.message); setLoading(false); return; }
-
-      toast.success("Organization created! Welcome aboard!");
-    } else {
-      // Join existing org via invite code
-      const { data: org } = await supabase
-        .from("organizations")
-        .select("id")
-        .eq("invite_code", inviteCode.trim().toUpperCase())
-        .maybeSingle();
-
-      if (!org) { toast.error("Invalid invite code"); setLoading(false); return; }
-
-      // Create profile (approved = false, needs admin approval)
-      const { error: profileError } = await supabase.from("profiles").insert({ user_id: userId, name, email, org_id: org.id, approved: false });
-      if (profileError) { toast.error(profileError.message); setLoading(false); return; }
-
-      // Assign role
-      const { error: roleError } = await supabase.from("user_roles").insert({ user_id: userId, role });
-      if (roleError) { toast.error(roleError.message); setLoading(false); return; }
-
-      // Create notification for org admins
-      // We'll just create a generic notification — admins will see pending members on Team page
-      toast.success("Request sent! Waiting for admin approval.");
-    }
-
-    // Refresh profile data so AuthContext picks up the new role/org
-    await refreshProfile();
     setLoading(false);
-    navigate("/dashboard");
   };
 
   return (
@@ -160,48 +96,90 @@ const Signup = () => {
             {step === "form" ? "Create your account" : "Verify your email"}
           </CardTitle>
           <CardDescription>
-            {step === "form" ? "Start managing projects with your team" : `Enter the 6-digit code sent to ${email}`}
+            {step === "form"
+              ? "Start managing projects with your team"
+              : `Enter the 6-digit code sent to ${email}`}
           </CardDescription>
         </CardHeader>
+
         <CardContent>
           {step === "form" ? (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label>Your Role</Label>
                 <Select value={role} onValueChange={(v) => setRole(v as AppRole)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="admin">Admin (Create Organization)</SelectItem>
-                    <SelectItem value="manager">Manager (Join Organization)</SelectItem>
-                    <SelectItem value="member">Member (Join Organization)</SelectItem>
+                    <SelectItem value="admin">
+                      Admin (Create Organization)
+                    </SelectItem>
+                    <SelectItem value="manager">
+                      Manager (Join Organization)
+                    </SelectItem>
+                    <SelectItem value="member">
+                      Member (Join Organization)
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               {role === "admin" ? (
                 <div className="space-y-2">
-                  <Label htmlFor="orgName">Organization Name</Label>
-                  <Input id="orgName" placeholder="Acme Corp" value={orgName} onChange={(e) => setOrgName(e.target.value)} required />
+                  <Label>Organization Name</Label>
+                  <Input
+                    placeholder="Acme Corp"
+                    value={orgName}
+                    onChange={(e) => setOrgName(e.target.value)}
+                    required
+                  />
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <Label htmlFor="inviteCode">Organization Invite Code</Label>
-                  <Input id="inviteCode" placeholder="e.g. AB12CD34" value={inviteCode} onChange={(e) => setInviteCode(e.target.value.toUpperCase())} required className="uppercase tracking-widest font-mono" />
-                  <p className="text-xs text-muted-foreground">Ask your organization admin for the invite code</p>
+                  <Label>Organization Invite Code</Label>
+                  <Input
+                    placeholder="AB12CD34"
+                    value={inviteCode}
+                    onChange={(e) =>
+                      setInviteCode(e.target.value.toUpperCase())
+                    }
+                    required
+                    className="uppercase tracking-widest font-mono"
+                  />
                 </div>
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input id="name" placeholder="John Doe" value={name} onChange={(e) => setName(e.target.value)} required />
+                <Label>Full Name</Label>
+                <Input
+                  placeholder="John Doe"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="email">Work Email</Label>
-                <Input id="email" type="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  placeholder="you@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" placeholder="Min 6 characters" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <Label>Password</Label>
+                <Input
+                  type="password"
+                  placeholder="Min 6 characters"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
               </div>
 
               <Button type="submit" className="w-full" disabled={loading}>
@@ -213,26 +191,42 @@ const Signup = () => {
               <div className="flex justify-center">
                 <InputOTP maxLength={6} value={otp} onChange={setOtp}>
                   <InputOTPGroup>
-                    <InputOTPSlot index={0} />
-                    <InputOTPSlot index={1} />
-                    <InputOTPSlot index={2} />
-                    <InputOTPSlot index={3} />
-                    <InputOTPSlot index={4} />
-                    <InputOTPSlot index={5} />
+                    {[0, 1, 2, 3, 4, 5].map((i) => (
+                      <InputOTPSlot key={i} index={i} />
+                    ))}
                   </InputOTPGroup>
                 </InputOTP>
               </div>
-              <Button className="w-full" onClick={handleVerifyOtp} disabled={loading || otp.length !== 6}>
+
+              <Button
+                className="w-full"
+                onClick={handleVerifyOtp}
+                disabled={loading}
+              >
                 {loading ? "Verifying…" : "Verify & Create Account"}
               </Button>
-              <Button variant="ghost" className="w-full" onClick={() => { setStep("form"); setOtp(""); }}>
+
+              <Button
+                variant="ghost"
+                className="w-full"
+                onClick={() => {
+                  setStep("form");
+                  setOtp("");
+                }}
+              >
                 Back
               </Button>
             </div>
           )}
+
           <p className="mt-6 text-center text-sm text-muted-foreground">
             Already have an account?{" "}
-            <Link to="/login" className="text-primary hover:underline font-medium">Sign in</Link>
+            <Link
+              to="/login"
+              className="text-primary hover:underline font-medium"
+            >
+              Sign in
+            </Link>
           </p>
         </CardContent>
       </Card>
