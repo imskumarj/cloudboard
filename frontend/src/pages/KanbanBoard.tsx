@@ -46,6 +46,7 @@ const KanbanBoard = () => {
   const { profile, user } = useAuth();
   const { data: projects = [] } = useProjects();
   const { data: members = [] } = useTeamMembers();
+  console.log("Projects:", projects);
 
   const [tasks, setTasks] = useState<any[]>([]);
   const [filterProject, setFilterProject] = useState<string>("all");
@@ -112,7 +113,7 @@ const KanbanBoard = () => {
   // Set defaults when data loads
   useEffect(() => {
     if (projects.length > 0 && !newTask.project_id) {
-      setNewTask((t) => ({ ...t, project_id: projects[0].id }));
+      setNewTask((t) => ({ ...t, project_id: projects[0]._id }));
     }
     if (user && !newTask.assignee_id) {
       setNewTask((t) => ({ ...t, assignee_id: user.id }));
@@ -170,7 +171,7 @@ const KanbanBoard = () => {
         description: "",
         priority: "medium",
         assignee_id: user?.id || "",
-        project_id: projects[0]?.id || "",
+        project_id: projects[0]?._id || "",
       });
 
       setAddOpen(false);
@@ -217,7 +218,7 @@ const KanbanBoard = () => {
               <SelectContent>
                 <SelectItem value="all">All Projects</SelectItem>
                 {projects.map((p: any) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  <SelectItem key={p._id} value={p._id}>{p.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -258,7 +259,7 @@ const KanbanBoard = () => {
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {projects.map((p: any) => (
-                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                          <SelectItem key={p._id} value={p._id}>{p.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -275,7 +276,7 @@ const KanbanBoard = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button onClick={handleAddTask} disabled={!newTask.title || !newTask.project_id} className="w-full">Create Task</Button>
+                <Button onClick={handleAddTask} className="w-full">Create Task</Button>
               </div>
             </DialogContent>
           </Dialog>

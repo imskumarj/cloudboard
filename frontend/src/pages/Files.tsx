@@ -4,8 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFiles, useProjects } from "@/hooks/useOrgData";
-import { supabase } from "@/integrations/supabase/client";
-import { logActivity } from "@/lib/activity";
+import { getFiles, getUploadUrl, saveFileMeta, deleteFile as deleteFileService } from "@/services/file.service";
 import { useQueryClient } from "@tanstack/react-query";
 import { FileText, Image, FileArchive, File, Upload, LayoutGrid, List, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -50,35 +49,35 @@ const Files = () => {
   };
 
   const handleUpload = async (fileList: FileList | null) => {
-    if (!fileList || !profile?.org_id || !user) return;
+    if (!fileList) return;
+
     setUploading(true);
 
     for (const file of Array.from(fileList)) {
-      const ext = file.name.split(".").pop() || "";
-      const storagePath = `${profile.org_id}/${Date.now()}-${file.name}`;
+      try {
+        const { uploadUrl, key, publicUrl } = await getUploadUrl({
+          fileName: file.name,
+          contentType: file.type,
+        });
 
-      const { error: uploadError } = await supabase.storage
-        .from("project-files")
-        .upload(storagePath, file);
+        // Upload directly to S3
+        await fetch(uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
 
-      if (uploadError) {
-        toast.error(`Failed to upload ${file.name}: ${uploadError.message}`);
-        continue;
-      }
+        // Save metadata
+        await saveFileMeta({
+          name: file.name,
+          key,
+          url: publicUrl,
+          size: file.size,
+          type: file.name.split(".").pop(),
+        });
 
-      const { error: dbError } = await supabase.from("files").insert({
-        name: file.name,
-        type: ext,
-        size: file.size,
-        storage_path: storagePath,
-        org_id: profile.org_id,
-        uploaded_by: user.id,
-      });
-
-      if (dbError) {
-        toast.error(`Failed to save ${file.name}: ${dbError.message}`);
-      } else {
-        logActivity(profile.org_id, user.id, "uploaded file", file.name);
+      } catch {
+        toast.error(`Failed to upload ${file.name}`);
       }
     }
 
@@ -87,25 +86,35 @@ const Files = () => {
     setUploading(false);
   };
 
-  const handleDelete = async (fileId: string, storagePath: string, fileName: string) => {
-    const { error: storageError } = await supabase.storage.from("project-files").remove([storagePath]);
-    if (storageError) {
-      toast.error(storageError.message);
-      return;
-    }
-    const { error } = await supabase.from("files").delete().eq("id", fileId);
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success("File deleted");
-      if (profile && user) logActivity(profile.org_id!, user.id, "deleted file", fileName);
+  const handleDelete = async (
+    fileId: string,
+    fileName: string
+  ) => {
+    try {
+      setUploading(true);
+
+      await deleteFileService(fileId);
+
+      toast.success(`${fileName} deleted successfully`);
+
       queryClient.invalidateQueries({ queryKey: ["files"] });
+    } catch (err: any) {
+      toast.error(
+        err?.response?.data?.message || "Failed to delete file"
+      );
+    } finally {
+      setUploading(false);
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    handleUpload(e.dataTransfer.files);
+    e.stopPropagation();
+
+    if (uploading) return;
+
+    const files = e.dataTransfer.files;
+    handleUpload(files);
   };
 
   if (isLoading) {
@@ -142,7 +151,10 @@ const Files = () => {
       <div
         className="border-2 border-dashed border-border rounded-xl p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
         onClick={() => fileInputRef.current?.click()}
-        onDragOver={(e) => e.preventDefault()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
         onDrop={handleDrop}
       >
         <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
@@ -172,7 +184,7 @@ const Files = () => {
                   </div>
                   {canDelete && (
                     <button
-                      onClick={() => handleDelete(f.id, f.storage_path, f.name)}
+                      onClick={() => handleDelete(f._id || f.id, f.name)}
                       className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 rounded bg-destructive/10 text-destructive hover:bg-destructive/20 transition-all"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -199,7 +211,7 @@ const Files = () => {
                   <span className="text-xs text-muted-foreground hidden sm:inline">{new Date(f.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                   {canDelete && (
                     <button
-                      onClick={() => handleDelete(f.id, f.storage_path, f.name)}
+                      onClick={() => handleDelete(f._id || f.id, f.name)}
                       className="opacity-0 group-hover:opacity-100 p-1 rounded text-destructive hover:bg-destructive/10 transition-all"
                     >
                       <Trash2 className="h-3.5 w-3.5" />

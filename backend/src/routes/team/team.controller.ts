@@ -12,8 +12,8 @@ export const getTeamMembers = async (req: Request, res: Response) => {
 
   res.json(
     members.map((m) => ({
-      id: m._id,
-      user_id: m._id,
+      id: m._id.toString(),
+      user_id: m._id.toString(),
       name: m.name,
       email: m.email,
       role: m.role,

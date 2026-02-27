@@ -48,6 +48,7 @@ function getInitials(name: string) {
 const Team = () => {
   const { role: currentUserRole, user, organization } = useAuth();
   const { data: members = [], isLoading } = useTeamMembers();
+  console.log("Members:", members);
   const queryClient = useQueryClient();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -202,7 +203,7 @@ const Team = () => {
           <CardContent>
             <div className="space-y-3">
               {pendingMembers.map((m: any) => (
-                <div key={m.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                <div key={m._id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
                   <Avatar className="h-10 w-10">
                     <AvatarFallback className="bg-amber-500/10 text-amber-600 text-sm">{getInitials(m.name)}</AvatarFallback>
                   </Avatar>
@@ -212,10 +213,10 @@ const Team = () => {
                   </div>
                   <Badge className="capitalize text-[10px] bg-muted text-muted-foreground">{m.role}</Badge>
                   <div className="flex gap-1.5">
-                    <Button disabled={actionLoading === m.id} size="sm" variant="outline" className="h-8 text-green-600 border-green-200 hover:bg-green-50" onClick={() => handleApprove(m.id, m.name)}>
+                    <Button disabled={actionLoading === m._id} size="sm" variant="outline" className="h-8 text-green-600 border-green-200 hover:bg-green-50" onClick={() => handleApprove(m._id, m.name)}>
                       <UserCheck className="h-3.5 w-3.5 mr-1" /> Approve
                     </Button>
-                    <Button disabled={actionLoading === m.id} size="sm" variant="outline" className="h-8 text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleDecline(m.id, m.name)}>
+                    <Button disabled={actionLoading === m._id} size="sm" variant="outline" className="h-8 text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleDecline(m._id, m.name)}>
                       <UserX className="h-3.5 w-3.5 mr-1" /> Decline
                     </Button>
                   </div>
@@ -234,7 +235,7 @@ const Team = () => {
         <CardContent>
           <div className="space-y-3">
             {approvedMembers.map((m: any) => (
-              <div key={m.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
+              <div key={m._id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
                 <Avatar className="h-10 w-10">
                   <AvatarFallback className="bg-primary/10 text-primary text-sm">{getInitials(m.name)}</AvatarFallback>
                 </Avatar>
@@ -242,11 +243,11 @@ const Team = () => {
                   <p className="font-medium text-sm">{m.name}</p>
                   <p className="text-xs text-muted-foreground">{m.email}</p>
                 </div>
-                {isAdmin && m.id !== user?.id ? (
+                {isAdmin && m._id !== user?.id ? (
                   <Select
                     value={m.role}
-                    disabled={actionLoading === m.id}
-                    onValueChange={(v) => handleRoleChange(m.id, v)}
+                    disabled={actionLoading === m._id}
+                    onValueChange={(v) => handleRoleChange(m._id, v)}
                   >
                     <SelectTrigger className="w-28 h-8">
                       <SelectValue />

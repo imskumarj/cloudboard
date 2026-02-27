@@ -47,7 +47,7 @@ const Landing = () => {
           <Zap className="mr-2 h-3.5 w-3.5" /> Now with real-time collaboration
         </div>
         <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight max-w-4xl mx-auto leading-tight">
-          Manage projects at <span className="text-primary">cloud speed</span>
+          Cloud<span className="text-primary">Board</span>
         </h1>
         <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
           CloudBoard is the multi-tenant SaaS platform that brings your teams, tasks, and files together — with Kanban boards, real-time updates, and powerful organization management.

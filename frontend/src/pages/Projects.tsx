@@ -117,13 +117,13 @@ const Projects = () => {
                     <Badge className={`text-[10px] capitalize ${statusColors[p.status]}`}>{p.status}</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground line-clamp-2">{p.description}</p>
-                  <div className="space-y-1">
+                  {/* <div className="space-y-1">
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground">Progress</span>
                       <span className="font-medium">{p.progress}%</span>
                     </div>
                     <Progress value={p.progress} className="h-1.5" />
-                  </div>
+                  </div> */}
                   <span className="text-[11px] text-muted-foreground">Updated {new Date(p.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                 </CardContent>
               </Card>
@@ -143,10 +143,10 @@ const Projects = () => {
                   <p className="text-xs text-muted-foreground truncate">{p.description}</p>
                 </div>
                 <Badge className={`text-[10px] capitalize hidden sm:inline-flex ${statusColors[p.status]}`}>{p.status}</Badge>
-                <div className="w-24 hidden md:block">
+                {/* <div className="w-24 hidden md:block">
                   <Progress value={p.progress} className="h-1.5" />
                   <p className="text-[10px] text-muted-foreground text-right mt-0.5">{p.progress}%</p>
-                </div>
+                </div> */}
               </CardContent>
             </Card>
           ))}

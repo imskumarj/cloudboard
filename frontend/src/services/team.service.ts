@@ -6,16 +6,13 @@ export const getTeamMembers = async () => {
 };
 
 export const approveMember = async (userId: string) => {
-  const res = await api.patch(`/team/${userId}/approve`);
-  return res.data;
+  return api.patch(`/team/${userId}/approve`);
 };
 
 export const declineMember = async (userId: string) => {
-  const res = await api.delete(`/team/${userId}/decline`);
-  return res.data;
+  return api.delete(`/team/${userId}`);
 };
 
 export const changeRole = async (userId: string, role: string) => {
-  const res = await api.patch(`/team/${userId}/role`, { role });
-  return res.data;
+  return api.patch(`/team/${userId}/role`, { role });
 };
