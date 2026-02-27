@@ -61,17 +61,25 @@ export const initSocket = (server: http.Server) => {
   io.on("connection", (socket) => {
     console.log("🔌 User connected:", socket.id);
 
+    const { id: userId, orgId } = socket.data.user;
+
+    /**
+     * 👤 Join personal room automatically
+     */
+    socket.join(userId);
+    console.log(`Socket ${socket.id} joined personal room ${userId}`);
+
     /**
      * 🏢 Join Organization Room (Validated)
      */
-    socket.on("join-org", (orgId: string) => {
-      if (socket.data.user.orgId !== orgId) {
+    socket.on("join-org", (incomingOrgId: string) => {
+      if (orgId !== incomingOrgId) {
         console.warn("⚠ Unauthorized room join attempt");
         return;
       }
 
-      socket.join(orgId);
-      console.log(`Socket ${socket.id} joined org ${orgId}`);
+      socket.join(incomingOrgId);
+      console.log(`Socket ${socket.id} joined org ${incomingOrgId}`);
     });
 
     socket.on("disconnect", () => {
