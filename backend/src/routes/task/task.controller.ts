@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import Task from "../../models/task.model";
 import { getIO } from "../../socket";
+import { notifyTaskAssigned } from "../../utils/taskNotification.util";
 
 // GET tasks
 export const getTasks = async (req: Request, res: Response, next: any) => {
@@ -56,8 +57,16 @@ export const createTask = async (req: Request, res: Response) => {
   };
 
   const io = getIO();
-
   io.to((req as any).user?.orgId).emit("task-created", formatted);
+
+  // 🔥 Notify assigned user (if exists)
+  if (task.assignedTo) {
+    await notifyTaskAssigned(
+      task.assignedTo.toString(),
+      task.orgId.toString(),
+      task
+    );
+  }
 
   res.status(201).json(formatted);
 };
@@ -66,32 +75,48 @@ export const createTask = async (req: Request, res: Response) => {
 export const updateTask = async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  const task = await Task.findOneAndUpdate(
-    { _id: id, orgId: (req as any).user?.orgId },
-    req.body,
-    { new: true }
-  );
+  const existingTask = await Task.findOne({
+    _id: id,
+    orgId: (req as any).user?.orgId,
+  });
 
-  if (!task) {
+  if (!existingTask) {
     return res.status(404).json({ message: "Task not found" });
   }
 
-  const formatted = {
-    id: task._id,
-    title: task.title,
-    description: task.description,
-    status: task.status,
-    priority: task.priority,
-    project_id: task.projectId,
-    assignee_id: task.assignedTo,
-    due_date: task.dueDate,
-    tags: task.tags || [],
-    created_at: task.createdAt,
-  };
+  const previousAssignee = existingTask.assignedTo?.toString();
+
+  Object.assign(existingTask, req.body);
+  await existingTask.save();
 
   const io = getIO();
 
+  const formatted = {
+    id: existingTask._id,
+    title: existingTask.title,
+    description: existingTask.description,
+    status: existingTask.status,
+    priority: existingTask.priority,
+    project_id: existingTask.projectId,
+    assignee_id: existingTask.assignedTo,
+    due_date: existingTask.dueDate,
+    tags: existingTask.tags || [],
+    created_at: existingTask.createdAt,
+  };
+
   io.to((req as any).user?.orgId).emit("task-updated", formatted);
+
+  // 🔥 Notify if assignee changed
+  if (
+    existingTask.assignedTo &&
+    existingTask.assignedTo.toString() !== previousAssignee
+  ) {
+    await notifyTaskAssigned(
+      existingTask.assignedTo.toString(),
+      existingTask.orgId.toString(),
+      existingTask
+    );
+  }
 
   res.json(formatted);
 };

@@ -10,4 +10,6 @@ export const ENV = {
   FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:8080",
   SMTP_EMAIL: process.env.SMTP_EMAIL || "",
   SMTP_PASSWORD: process.env.SMTP_PASSWORD || "",
+  SMTP_HOST: process.env.SMTP_HOST || "",
+  SMTP_PORT: process.env.SMTP_PORT || "",
 }
