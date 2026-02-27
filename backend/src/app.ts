@@ -15,6 +15,8 @@ import orgRoutes from "./routes/org/org.routes"
 import projectRoutes from "./routes/project/project.routes"
 import taskRoutes from "./routes/task/task.routes"
 import teamRoutes from "./routes/team/team.routes"
+import userRoutes from "./routes/user/user.routes";
+import notificationPrefRoutes from "./routes/notificationPreference/notificationPref.routes";
 
 const app = express()
 
@@ -64,6 +66,8 @@ app.use("/api/org", orgRoutes)
 app.use("/api/projects", projectRoutes)
 app.use("/api/tasks", taskRoutes)
 app.use("/api/team", teamRoutes)
+app.use("/api/user", userRoutes);
+app.use("/api/notification-preferences", notificationPrefRoutes);
 
 // Global error handler
 app.use(errorHandler)

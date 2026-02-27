@@ -7,7 +7,12 @@ import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  getProfile,
+  updateProfile,
+  getNotificationPrefs,
+  updateNotificationPrefs,
+} from "@/services/settings.service";
 import { User, Bell, Moon, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -29,52 +34,58 @@ const Settings = () => {
   const [prefsLoaded, setPrefsLoaded] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
-    supabase
-      .from("notification_preferences")
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          setNotifPrefs({
-            email_notifications: data.email_notifications,
-            push_notifications: data.push_notifications,
-            task_assignments: data.task_assignments,
-            mentions: data.mentions,
-          });
-        }
-        setPrefsLoaded(true);
-      });
-  }, [user]);
+    const loadPrefs = async () => {
+      try {
+        const data = await getNotificationPrefs();
+        setNotifPrefs({
+          email_notifications: data.emailNotifications,
+          push_notifications: data.pushNotifications,
+          task_assignments: data.taskAssignments,
+          mentions: data.mentions,
+        });
+      } catch {
+        toast.error("Failed to load preferences");
+      }
+    };
+
+    loadPrefs();
+  }, []);
 
   const handleSave = async () => {
-    if (!profile) return;
-    setSaving(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ name, email })
-      .eq("user_id", profile.user_id);
-    setSaving(false);
-    if (error) {
-      toast.error(error.message);
-    } else {
+    try {
+      setSaving(true);
+      await updateProfile({ name, email });
       toast.success("Profile updated!");
-      refreshProfile();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update profile");
+    } finally {
+      setSaving(false);
     }
   };
 
   const updateNotifPref = async (key: string, value: boolean) => {
-    if (!user) return;
     const updated = { ...notifPrefs, [key]: value };
     setNotifPrefs(updated);
 
-    // Upsert preference
-    const { error } = await supabase
-      .from("notification_preferences")
-      .upsert({ user_id: user.id, ...updated }, { onConflict: "user_id" });
-    if (error) toast.error("Failed to save preference");
+    try {
+      await updateNotificationPrefs({
+        emailNotifications: updated.email_notifications,
+        pushNotifications: updated.push_notifications,
+        taskAssignments: updated.task_assignments,
+        mentions: updated.mentions,
+      });
+    } catch {
+      toast.error("Failed to save preference");
+    }
   };
+
+  useEffect(() => {
+    if (notifPrefs.push_notifications) {
+      if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission();
+      }
+    }
+  }, [notifPrefs.push_notifications]);
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -130,22 +141,6 @@ const Settings = () => {
               />
             </div>
           ))}
-        </CardContent>
-      </Card>
-
-      {/* Theme */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2"><Moon className="h-4 w-4 text-primary" /> Appearance</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Dark Mode</p>
-              <p className="text-xs text-muted-foreground">Use dark theme across the platform</p>
-            </div>
-            <Switch checked={true} />
-          </div>
         </CardContent>
       </Card>
 
