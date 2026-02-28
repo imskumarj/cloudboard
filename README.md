@@ -1,92 +1,132 @@
 # 🚀 CloudBoard
 
-### Multi-Tenant SaaS Project Management Platform
+## Multi-Tenant SaaS Project Management Platform (AWS Deployed)
 
-CloudBoard is a production-ready multi-tenant project management platform built using modern web technologies and deployed on AWS cloud infrastructure.
+CloudBoard is a production-ready **multi-tenant SaaS project management platform** built with modern full-stack technologies and deployed entirely on AWS cloud infrastructure.
 
-It supports organization-based authentication, role-based access control, Kanban boards, real-time collaboration, and secure file uploads.
+It supports organization-based isolation, role-based access control, real-time Kanban workflows, secure file uploads, and production-grade authentication.
 
 ---
 
-## 🧠 Tech Stack
+# 🌐 Live Demo (7 Days Only)
 
-### Frontend
+> ⚠️ Live temporarily for 7 days due to AWS billing & activity management.
 
-* Vite + React + TypeScript
+Frontend (S3 + CloudFront CDN):
+👉 [https://dcdggagutimb3.cloudfront.net/](https://dcdggagutimb3.cloudfront.net/)
+
+Backend API (EC2 behind CloudFront):
+👉 [https://dmpfizzawn1nj.cloudfront.net/](https://dmpfizzawn1nj.cloudfront.net/)
+
+Source Code:
+👉 [https://github.com/imskumarj/cloudboard](https://github.com/imskumarj/cloudboard)
+
+---
+
+# 🧠 Tech Stack
+
+## Frontend
+
+* Vite
+* React + TypeScript
 * Axios
 * Socket.io Client
+* CloudFront CDN
+* AWS S3 Static Hosting
 
-### Backend
+## Backend
 
 * Node.js + Express
 * MongoDB (Mongoose)
-* JWT + Refresh Tokens
-* Socket.io
-* AWS SDK
+* JWT Authentication (HttpOnly cookies)
+* Socket.io (WebSockets)
+* AWS SDK (S3 integration)
+* PM2 (Process Manager)
+* Nginx (Reverse Proxy)
 
-### Cloud Infrastructure
+## Cloud Infrastructure
 
-* AWS EC2 (Backend hosting)
-* AWS S3 (File storage + Static frontend hosting)
-* AWS CloudFront (CDN)
-* AWS IAM (Secure role-based access)
-* AWS CloudWatch (Logs & Monitoring)
-
----
-
-## 🏗 Architecture Overview
-
-* Frontend is deployed to **S3**
-* CloudFront serves as CDN
-* Backend runs on **EC2**
-* File uploads are stored in **private S3 buckets**
-* Signed URLs are generated via backend
-* All API logic lives strictly in backend
-* Multi-tenancy enforced via `orgId` isolation
+* AWS EC2 (Backend compute)
+* AWS S3 (File storage)
+* AWS S3 (Frontend static hosting)
+* AWS CloudFront (Frontend CDN + Backend HTTPS proxy)
+* AWS IAM (Access control)
+* AWS CloudWatch (Monitoring)
 
 ---
 
-## 📂 Project Structure
+# 🏗 Production Architecture
+
+```
+User
+  ↓
+Frontend CloudFront (HTTPS CDN)
+  ↓
+S3 Static Hosting
+
+Frontend calls →
+
+Backend CloudFront (HTTPS CDN)
+  ↓
+EC2 (HTTP, Node + Express)
+  ↓
+MongoDB
+
+File uploads →
+S3 (Private bucket via signed URLs)
+```
+
+### Why This Architecture?
+
+* Eliminates mixed-content issues (HTTPS everywhere)
+* No raw IP exposure
+* Secure cross-domain cookies
+* CDN-accelerated frontend & backend
+* Real SaaS-ready deployment structure
+
+---
+
+# 🔐 Core Features
+
+* Organization-based multi-tenancy
+* Role-based access control (Admin / Manager / Member)
+* Drag-and-drop Kanban board
+* Real-time updates via WebSockets
+* Secure file uploads using pre-signed S3 URLs
+* JWT authentication via HttpOnly cookies
+* SameSite=None + Secure production cookies
+* CloudFront cookie forwarding
+* Full AWS production deployment
+
+---
+
+# 📂 Project Structure
 
 ```
 cloudboard/
 │
-├── frontend/          # Vite + React app
+├── frontend/          # React + Vite app
 ├── backend/           # Node + Express API
 │
 ├── docker-compose.yml # Local development only
 ├── .env.example
-├── .gitignore
-└── README.md
+├── README.md
 ```
 
 ---
 
-## 🔐 Core Features
+# 🖥 Local Development Setup
 
-* Organization-based multi-tenant authentication
-* Role-based access control (Admin, Manager, Member)
-* Kanban board management
-* Real-time updates (Socket.io)
-* Secure file uploads to AWS S3
-* JWT authentication + Refresh token rotation
-* IAM-based AWS access (no exposed credentials)
-* CloudWatch logging
-
----
-
-## 🖥 Local Development Setup
-
-### 1️⃣ Clone Repository
+## 1️⃣ Clone Repository
 
 ```
-git clone <repo-url>
+git clone https://github.com/imskumarj/cloudboard.git
 cd cloudboard
 ```
 
 ---
 
-### 2️⃣ Backend Setup (Port 3000)
+## 2️⃣ Backend Setup
 
 ```
 cd backend
@@ -103,7 +143,7 @@ http://localhost:3000
 
 ---
 
-### 3️⃣ Frontend Setup (Port 8080)
+## 3️⃣ Frontend Setup
 
 ```
 cd frontend
@@ -119,15 +159,13 @@ http://localhost:8080
 
 ---
 
-## 🐳 Optional: Run With Docker (Local Only)
-
-From root:
+# 🐳 Optional: Docker (Local Only)
 
 ```
 docker-compose up --build
 ```
 
-This spins up:
+Spins up:
 
 * MongoDB
 * Backend
@@ -135,39 +173,175 @@ This spins up:
 
 ---
 
-## 🌍 Production Deployment (AWS)
+# 🌍 Production Deployment Guide (AWS)
 
-### Frontend
-
-* Build: `npm run build`
-* Upload `/dist` to S3
-* CloudFront invalidation
-
-### Backend
-
-* Hosted on EC2
-* Process managed with PM2
-* Reverse proxied via Nginx
-* IAM role attached for:
-
-  * S3 access
-  * CloudWatch logging
+This section reflects the **actual live architecture used.**
 
 ---
 
-## 🔐 Security Considerations
+# 🔵 Frontend Deployment (S3 + CloudFront)
 
-* No AWS secrets stored in frontend
-* EC2 uses IAM Role for AWS access
-* All S3 buckets are private
-* Signed URLs for file uploads
-* Helmet, CORS, Rate limiting enabled
-* Refresh tokens stored in DB
-* Multi-tenant isolation enforced at query level
+### Step 1 — Build Frontend
+
+```
+cd frontend
+npm run build
+```
 
 ---
 
-## 🧩 Multi-Tenant Strategy
+### Step 2 — Create S3 Bucket
+
+* Disable block public access
+* Enable static website hosting
+* Upload contents of `/dist`
+
+---
+
+### Step 3 — Create CloudFront Distribution
+
+Origin:
+
+* S3 bucket
+
+Settings:
+
+* Viewer protocol → Redirect HTTP to HTTPS
+* Default root object → index.html
+
+---
+
+### Step 4 — Update Environment
+
+In `frontend/.env`:
+
+```
+VITE_API_URL=https://your-backend-cloudfront-url
+```
+
+Rebuild and upload again.
+
+---
+
+# 🟢 Backend Deployment (EC2 + CloudFront)
+
+---
+
+## Step 1 — Launch EC2 (Ubuntu)
+
+Open inbound ports:
+
+* 22 (SSH)
+* 80 (HTTP)
+
+---
+
+## Step 2 — Install Dependencies
+
+```
+sudo apt update
+sudo apt install nginx -y
+sudo apt install nodejs npm -y
+sudo npm install -g pm2
+```
+
+---
+
+## Step 3 — Clone & Setup Backend
+
+```
+git clone https://github.com/imskumarj/cloudboard.git
+cd cloudboard/backend
+npm install
+```
+
+Create `.env` using `.env.example`.
+
+---
+
+## Step 4 — Start Backend
+
+If using TypeScript build:
+
+```
+npm run build
+pm2 start dist/server.js --name cloudboard
+pm2 save
+```
+
+---
+
+## Step 5 — Configure Nginx Reverse Proxy
+
+```
+server {
+    listen 80;
+    server_name _;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+    }
+}
+```
+
+Restart nginx:
+
+```
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+---
+
+## Step 6 — Create Backend CloudFront
+
+Origin:
+
+* EC2 Public DNS (NOT raw IP)
+
+Important Settings:
+
+* Allowed methods → GET, POST, PUT, PATCH, DELETE
+* Cache policy → CachingDisabled
+* Origin request policy → AllViewer
+* Viewer protocol → Redirect HTTP to HTTPS
+
+This enables:
+
+* Cookie forwarding
+* WebSockets
+* Full API support
+* HTTPS without buying domain
+
+---
+
+# 📦 S3 File Upload Setup
+
+* Create private S3 bucket
+* Add IAM user or IAM role
+* Add credentials to backend `.env`
+* Use pre-signed URLs (already implemented)
+
+---
+
+# 🔐 Security Practices
+
+* No AWS credentials exposed to frontend
+* HttpOnly authentication cookies
+* SameSite=None; Secure for cross-domain
+* Multi-tenant orgId enforcement
+* Private S3 bucket
+* Signed upload URLs
+* Rate limiting + Helmet
+* CloudFront HTTPS enforced
+
+---
+
+# 🧩 Multi-Tenant Strategy
 
 Every document contains:
 
@@ -178,40 +352,54 @@ orgId: ObjectId
 Middleware extracts:
 
 ```
-req.orgId
+req.user.orgId
 ```
 
 All queries scoped by:
 
 ```
-Model.find({ orgId: req.orgId })
+Model.find({ orgId: req.user.orgId })
 ```
 
-This prevents cross-organization data leakage.
+Prevents cross-organization data leakage.
 
 ---
 
-## 📊 Logging & Monitoring
+# ⚙️ Real-World Problems Solved
 
-* Application logs → CloudWatch
-* Metrics monitoring → CloudWatch
-* Errors centralized via error middleware
-
----
-
-## 🚀 Future Scaling Plan
-
-* Move backend from EC2 → ECS
-* Add Redis for Socket scaling
-* Use MongoDB Atlas Cluster
-* Implement CI/CD pipelines
-* Add API Gateway
+* Mixed content (HTTPS vs HTTP)
+* CORS configuration across CDNs
+* Cookie forwarding via CloudFront
+* SameSite=None auth cookies
+* WebSocket proxying through CDN
+* Reverse proxy configuration
+* Multi-origin deployment
+* Production debugging
 
 ---
 
-## 👤 Author
+# 📊 Monitoring
+
+* PM2 process management
+* Nginx reverse proxy
+* CloudWatch (optional extension)
+
+---
+
+# 🚀 Future Improvements
+
+* Move EC2 → ECS / Fargate
+* Add Redis for socket scaling
+* Custom domain + ACM SSL
+* CI/CD pipeline
+* MongoDB Atlas cluster
+* API Gateway
+
+---
+
+# 👤 Author
 
 Sudhansu Kumar
-Founder & Developer
+Full-Stack Developer | Cloud Enthusiast
 
-CloudBoard is designed as a scalable SaaS foundation suitable for startups, enterprise tools, and production deployment.
+CloudBoard is designed as a scalable SaaS foundation suitable for startups, enterprise tools, and production-grade deployment.
